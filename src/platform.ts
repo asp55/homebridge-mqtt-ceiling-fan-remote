@@ -1,7 +1,7 @@
 import { API, DynamicPlatformPlugin, Logger, PlatformAccessory, PlatformConfig, Service, Characteristic } from 'homebridge';
 
-import { PLATFORM_NAME, PLUGIN_NAME, SCHEMA_VERSION } from './settings';
-import { CeilingFanRemote } from './platformAccessory';
+import { PLATFORM_NAME, PLUGIN_NAME, SCHEMA_VERSION } from './settings.js';
+import { CeilingFanRemote } from './platformAccessory.js';
 import os from 'os';
 
 import mqtt from 'mqtt';
@@ -63,8 +63,8 @@ const commands = {
  * parse the user config and discover/register accessories with Homebridge.
  */
 export class CeilingFanRemotePlatform implements DynamicPlatformPlugin {
-  public readonly Service: typeof Service = this.api.hap.Service;
-  public readonly Characteristic: typeof Characteristic = this.api.hap.Characteristic;
+  public readonly Service: typeof Service;
+  public readonly Characteristic: typeof Characteristic;
 
   // this is used to track restored cached accessories
   public readonly accessories: PlatformAccessory[] = [];
@@ -83,6 +83,9 @@ export class CeilingFanRemotePlatform implements DynamicPlatformPlugin {
     public readonly config: PlatformConfig,
     public readonly api: API,
   ) {
+    this.Service = api.hap.Service;
+    this.Characteristic = api.hap.Characteristic;
+
     this.log.debug('Initializing ceiling fan platform');
 
     if(!(this.config._version && this.config._version === SCHEMA_VERSION )) {
@@ -90,7 +93,7 @@ export class CeilingFanRemotePlatform implements DynamicPlatformPlugin {
       You're currently using version ${this.config._version ? this.config._version : '0.0.0'} 
       The latest version is ${SCHEMA_VERSION}
       Please update your configuration.`);
-    }
+    } 
     else {
       const connectUrl = `${this.config.mqtt.protocol}://${this.config.mqtt.host}:${this.config.mqtt.port}`;
       const connectionParams:mqtt.IClientOptions = {
@@ -206,7 +209,8 @@ export class CeilingFanRemotePlatform implements DynamicPlatformPlugin {
               return new CeilingFanRemote(this, existingAccessory);
   
               //this.remotes[remoteConfig.remote_id] = new CeilingFanRemote(this, existingAccessory);
-            } else {
+            }
+            else {
               // the accessory does not yet exist, so we need to create it
               this.log.info('Adding new accessory:', roomConfig.name);
     
@@ -289,6 +293,7 @@ export class CeilingFanRemotePlatform implements DynamicPlatformPlugin {
           this.log.debug(`Sending command: ${props.parameter} (${props.value})`, command);
 
           if(command && command > -1 && this.mqttClient) {
+            this.log.debug(`Sending command: ${props.parameter} (${props.value})`, command);
             this.mqttClient.publish(`cmnd/${this.config.rfbridge.topic}/rfraw`, hexCommand(props.remote, command));
           }
         });

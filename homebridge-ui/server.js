@@ -1,6 +1,8 @@
-const { HomebridgePluginUiServer } = require('@homebridge/plugin-ui-utils');
-const mqtt = require('mqtt');
+//const { HomebridgePluginUiServer } = require('@homebridge/plugin-ui-utils');
+//const mqtt = require('mqtt');
 
+import { HomebridgePluginUiServer } from '@homebridge/plugin-ui-utils';
+import mqtt from 'mqtt';
 // your class MUST extend the HomebridgePluginUiServer
 class UiServer extends HomebridgePluginUiServer {
   constructor () { 
@@ -19,12 +21,14 @@ class UiServer extends HomebridgePluginUiServer {
    * Handle requests made from the UI to the `/hello` endpoint.
    */
   async handleSniffRequest(payload) {
-    console.log("SNIFF REQUEST", payload);
+    console.log('SNIFF REQUEST', payload);
     
 
     const results = await new Promise((resolve)=>{
 
-      setTimeout(()=>{resolve({result:'timeout'})}, 5*60000)
+      setTimeout(()=>{
+        resolve({ result:'timeout' });
+      }, 5*60000);
 
       const connectUrl = `${payload.mqtt.protocol}://${payload.mqtt.host}:${payload.mqtt.port}`;
       const connectionParams = {
@@ -34,8 +38,12 @@ class UiServer extends HomebridgePluginUiServer {
         reconnectPeriod: 1000,
       };
 
-      if(payload.mqtt.user) connectionParams.username = payload.mqtt.user;
-      if(payload.mqtt.password) connectionParams.password = payload.mqtt.password;
+      if(payload.mqtt.user) {
+        connectionParams.username = payload.mqtt.user;
+      }
+      if(payload.mqtt.password) {
+        connectionParams.password = payload.mqtt.password;
+      }
 
       const rfbridgeResultsTopic = `tele/${payload.rfbridge.topic}/RESULT`;
 
@@ -52,8 +60,8 @@ class UiServer extends HomebridgePluginUiServer {
       });
 
       mqttClient.on('error', (error)=>{
-        resolve({result:'error', data:error})
-      })
+        resolve({ result:'error', data:error });
+      });
 
       mqttClient.on('message', (topic, data) => {
         if(topic===rfbridgeResultsTopic) {
@@ -79,14 +87,14 @@ class UiServer extends HomebridgePluginUiServer {
 
                   const room = parsedBinary[1];
                   mqttClient.end();
-                  resolve({result:'success', data:room})
+                  resolve({ result:'success', data:room });
                 }
               }
             }
           }
         }
       });
-    })
+    });
 
     
 

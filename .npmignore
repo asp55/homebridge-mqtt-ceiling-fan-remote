@@ -10,7 +10,7 @@ homebridge-ui-react
 .github
 
 # eslint
-.eslintrc
+eslint.config.js
 
 # typescript
 tsconfig.json
@@ -136,3 +136,4 @@ web_modules/
 .yarn/build-state.yml
 .pnp.*
 
+test/

@@ -117,8 +117,8 @@ export class CeilingFanRemote extends EventEmitter {
 
     //Initialize the state from context
     if(this.accessory.context.state) {
-      const updatedState = {...this.accessory.context.state, ...this.accessoryState};
-      this.accessoryState = {...updatedState};
+      const updatedState = { ...this.accessory.context.state, ...this.accessoryState };
+      this.accessoryState = { ...updatedState };
       
 
       const state = this.accessoryState;
@@ -139,7 +139,7 @@ export class CeilingFanRemote extends EventEmitter {
   private updateState(update:accessoryStateUpdate, afterUpdate:optionalCallback = null) {
     Object.keys(update).forEach(key=>{
       this.accessoryState[key] = update[key];
-      this.emit('update', {remote:this.accessory.context.config.remote_ids[0], parameter:key, value:update[key]});
+      this.emit('update', { remote:this.accessory.context.config.remote_ids[0], parameter:key, value:update[key] });
 
       if(this.updateDebouncers[key]) {
         clearTimeout(this.updateDebouncers[key]);
@@ -167,7 +167,7 @@ export class CeilingFanRemote extends EventEmitter {
 
   async setLightOn(value: CharacteristicValue) {
     // implement your own code to turn your device on/off
-    this.updateState({LightOn: value as boolean});
+    this.updateState({ LightOn: value as boolean });
 
     this.platform.log.debug(`${this.name}.setLightOn(${value})`);
   }
@@ -190,7 +190,7 @@ export class CeilingFanRemote extends EventEmitter {
       //If the new brightness is 0, we're not going to actually save it to the state. So that if the light is just turned on we can return to the last brightness that was set.
 
       this.updateState(
-        {LightBrightness: newBrightness},
+        { LightBrightness: newBrightness },
         ()=>{
           //After debounce snap the value
           this.platform.log.debug(`${this.name}.snapLightBrightness(${value}) -> ${snapValue}%`);
@@ -212,7 +212,7 @@ export class CeilingFanRemote extends EventEmitter {
 
   async setFanOn(value: CharacteristicValue) {
     // implement your own code to turn your device on/off
-    this.updateState({FanOn: value as FanActive});
+    this.updateState({ FanOn: value as FanActive });
 
     this.platform.log.debug(`${this.name}.setFanOn(${value})`);
   }
@@ -235,7 +235,7 @@ export class CeilingFanRemote extends EventEmitter {
       // So that if the fan is just turned on we can return to the last speed that was set.
 
       this.updateState(
-        {FanSpeed: newSpeed},
+        { FanSpeed: newSpeed },
         ()=>{
           //After debounce snap the value
           this.platform.log.debug(`${this.name}.snapFanSpeed(${value}) -> ${snapValue}%`);
