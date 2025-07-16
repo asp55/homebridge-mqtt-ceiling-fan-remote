@@ -5,6 +5,7 @@ import { CeilingFanRemote } from './platformAccessory.js';
 import os from 'os';
 
 import mqtt from 'mqtt';
+import DebounceQueue from './debounceQueue.js';
 
 function binaryCommand(remote:string, command: number = -1): string {
   const room: string = `1${remote.padStart(40, '0')}0`;
@@ -32,25 +33,19 @@ function hexCommand(remote:string, command: number = -1):string {
 
 
 const commands = {
-  LightOn: {
-    true: 138,
-    false: 266
+  Brightness: {
+    0: 266,
+    12: 10,
+    25: 11,
+    37: 12,
+    50: 13,
+    62: 14,
+    75: 15,
+    87: 72,
+    100: 74
   },
-  LightBrightness: {
-    1: 10,
-    2: 11,
-    3: 12,
-    4: 13,
-    5: 14,
-    6: 15,
-    7: 72,
-    8: 74
-  },
-  FanOn: {
+  Speed: {
     0: 98,
-    1: -1
-  },
-  FanSpeed: {
     1: 2,
     2: 32,
     3: 66
@@ -78,6 +73,8 @@ export class CeilingFanRemotePlatform implements DynamicPlatformPlugin {
   private rfbridgeResultsTopic:string = '';
   private rfbridgeBootTopic:string = '';
 
+  private debounceQueue:DebounceQueue = new DebounceQueue(500);
+
   constructor(
     public readonly log: Logger,
     public readonly config: PlatformConfig,
@@ -86,7 +83,7 @@ export class CeilingFanRemotePlatform implements DynamicPlatformPlugin {
     this.Service = api.hap.Service;
     this.Characteristic = api.hap.Characteristic;
 
-    this.log.debug('Initializing ceiling fan platform');
+    this.log.debug(Date.now()+' Initializing ceiling fan platform');
 
     if(!(this.config._version && this.config._version === SCHEMA_VERSION )) {
       this.log.info(`Schema version has been updated.
@@ -117,10 +114,10 @@ export class CeilingFanRemotePlatform implements DynamicPlatformPlugin {
       this.mqttClient = mqtt.connect(connectUrl, connectionParams);
 
       const connectCallback = () => {
-        this.log.debug('MQTT Connected');
+        this.log.debug(Date.now()+' MQTT Connected');
         if(this.mqttClient) {
           this.mqttClient.subscribe([this.rfbridgeResultsTopic, this.rfbridgeBootTopic], () => {
-            this.log.debug(`Subscribed to topic '${this.rfbridgeResultsTopic}'`);
+            this.log.debug(Date.now()+` Subscribed to topic '${this.rfbridgeResultsTopic}'`);
           });
 
           //Make sure that code sniffing is on
@@ -139,10 +136,10 @@ export class CeilingFanRemotePlatform implements DynamicPlatformPlugin {
     // in order to ensure they weren't added to homebridge already. This event can also be used
     // to start discovery of new accessories.
     this.api.on('didFinishLaunching', () => {
-      this.log.debug('Executed didFinishLaunching callback');
+      this.log.debug(Date.now()+' Executed didFinishLaunching callback');
       // run the method to discover / register your devices as accessories
       this.initialize();
-      this.log.debug('Finished initializing ceiling fan platform');
+      this.log.debug(Date.now()+' Finished initializing ceiling fan platform');
     });
   }
 
@@ -166,7 +163,7 @@ export class CeilingFanRemotePlatform implements DynamicPlatformPlugin {
   }
 
   initialize() {
-    this.log.debug('Initializing.');
+    this.log.debug(Date.now()+' Initializing.');
 
     if(!(this.config._version && this.config._version === SCHEMA_VERSION )) {
       this.removeUnusedAccessoriesFromCache();
@@ -246,11 +243,11 @@ export class CeilingFanRemotePlatform implements DynamicPlatformPlugin {
             const rfraw = JSON.parse(payload.toString()).RfRaw;
             if(rfraw && rfraw.Data) {
               const message = rfraw.Data as string;
-              this.log.debug('Received Message:', topic, message);
+              this.log.debug(Date.now()+' Received Message:', topic, message);
   
               if(message.substring(2, 4)==='A6' && message.substring(6, 8)===this.config.rfbridge.protocol) {
   
-                this.log.debug('Parsing Message:', message);
+                this.log.debug(Date.now()+' Parsing Message:', message);
                 const uartPayload = message.substring(8, message.length-2);
   
                 const bytes = uartPayload.match(/../g);
@@ -263,13 +260,17 @@ export class CeilingFanRemotePlatform implements DynamicPlatformPlugin {
                   if(parsedBinary !== null ) {
                     // const command = parsedBinary[2];
                     // const iCommand = parsedBinary[3];
-                    // this.log.debug('  to binary -> ', binaryString, {room, command, iCommand, commandNum: parseInt(command, 2)});
+                    // this.log.debug(Date.now()+'   to binary -> ', binaryString, {room, command, iCommand, commandNum: parseInt(command, 2)});
   
                     const remote = parsedBinary[1];
                     const command = parseInt(parsedBinary[2], 2);
   
                     if(this.remotes[remote]) {
-                      this.remotes[remote].forEach(room=>room.update(command));
+                      this.remotes[remote].forEach(accessory=>{
+                        this.log.debug(Date.now()+` Sending command (${command}) to ${accessory.config.name}`);
+
+                        accessory.update(command)
+                      });
                     }
                   }
                 }
@@ -287,14 +288,22 @@ export class CeilingFanRemotePlatform implements DynamicPlatformPlugin {
 
 
       //Add event listener to remotes for transmitting changes to mqtt
-      Object.values(this.rooms).forEach(rooms=>{
-        rooms.addListener('update', props=>{
+      Object.values(this.rooms).forEach(room=>{
+        room.addListener('update', props=>{
           const command = commands[props.parameter][props.value];
-          this.log.debug(`Sending command: ${props.parameter} (${props.value})`, command);
+          
+          this.log.debug(Date.now()+` Recieved update from ${room.config.name}: ${JSON.stringify(props)}`, command);
 
-          if(command && command > -1 && this.mqttClient) {
-            this.log.debug(`Sending command: ${props.parameter} (${props.value})`, command);
-            this.mqttClient.publish(`cmnd/${this.config.rfbridge.topic}/rfraw`, hexCommand(props.remote, command));
+          if(command && this.mqttClient) {
+
+            const mqttClient = this.mqttClient;
+            const commandCallback = ()=>{
+              this.log.debug(Date.now()+` Sending command: ${room.config.name} ${props.parameter} (${props.value})`, hexCommand(props.remote, command));
+              mqttClient.publish(`cmnd/${this.config.rfbridge.topic}/rfraw`, hexCommand(props.remote, command));
+            }
+            commandCallback.bind(this);
+
+            this.debounceQueue.queue(`${props.remote}/${props.parameter}`, commandCallback)
           }
         });
       });
