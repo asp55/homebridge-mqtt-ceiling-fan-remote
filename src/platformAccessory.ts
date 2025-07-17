@@ -3,34 +3,27 @@ import { Service, PlatformAccessory, CharacteristicValue } from 'homebridge';
 import { CeilingFanRemotePlatform } from './platform';
 import EventEmitter from 'node:events';
 
+
+
 const BrightnessLevels = 8;
 const FanSpeeds = 3;
 
 type FanActive = 0 | 1;
 
+const FanStateActive:FanActive = 1;
+const FanStateInactive:FanActive = 0;
+
+
+const LightLevels = [12, 25, 37, 50, 62, 75, 87, 100];
+
+
 interface accessoryState {
-  LightOn:boolean; 
-  LightBrightness:number;
+  LightOn:boolean;
+  Brightness:number;
   FanOn: FanActive;
-  FanSpeed: number;
+  Speed: number;
 }
 
-interface accessoryStateUpdate {
-  LightOn?:boolean; 
-  LightBrightness?:number;
-  FanOn?: FanActive;
-  FanSpeed?: number;
-}
-
-type Callback = ()=>unknown;
-type optionalCallback = null | Callback;
-
-interface accessoryUpdateDebouncer {
-  LightOn?:NodeJS.Timeout; 
-  LightBrightness?:NodeJS.Timeout;
-  FanOn?: NodeJS.Timeout;
-  FanSpeed?: NodeJS.Timeout;
-}
 
 /**
  * Platform Accessory
@@ -46,12 +39,10 @@ export class CeilingFanRemote extends EventEmitter {
 
   private accessoryState:accessoryState = {
     LightOn: false,
-    LightBrightness: BrightnessLevels,
+    Brightness: 100,
     FanOn: 0,
-    FanSpeed: FanSpeeds,
+    Speed: 100,
   };
-
-  private updateDebouncers:accessoryUpdateDebouncer = {};
 
   constructor(
     private readonly platform: CeilingFanRemotePlatform,
@@ -60,7 +51,7 @@ export class CeilingFanRemote extends EventEmitter {
 
     super();
     
-    this.platform.log.debug('Constructing ceiling fan remote with context:', this.accessory.context);
+    //this.platform.log.debug(Date.now()+" "+'Constructing ceiling fan remote with context:', this.accessory.context);
     this.name = this.accessory.context.config.name;
     this.serial = this.accessory.context.config._id.toString();
 
@@ -72,62 +63,75 @@ export class CeilingFanRemote extends EventEmitter {
       .setCharacteristic(this.platform.Characteristic.SerialNumber, this.serial);
 
     // INITIALIZE LIGHTBULB SERVICE
-    (()=>{
-      // get the LightBulb service if it exists, otherwise create a new LightBulb service
-      this.lightService = this.accessory.getService(this.platform.Service.Lightbulb) || this.accessory.addService(this.platform.Service.Lightbulb);
 
-      // set the service name, this is what is displayed as the default name on the Home app
-      this.lightService.setCharacteristic(this.platform.Characteristic.Name, `${this.name} Light`);
+    // get the LightBulb service if it exists, otherwise create a new LightBulb service
+    this.lightService = this.accessory.getService(this.platform.Service.Lightbulb) || this.accessory.addService(this.platform.Service.Lightbulb);
 
-      // each service must implement at-minimum the "required characteristics" for the given service type
-      // see https://developers.homebridge.io/#/service/Lightbulb
+    // set the service name, this is what is displayed as the default name on the Home app
+    this.lightService.setCharacteristic(this.platform.Characteristic.Name, `${this.name} Light`);
 
-      // register handlers for the On/Off Characteristic
-      this.lightService.getCharacteristic(this.platform.Characteristic.On)
-        .onSet(this.setLightOn.bind(this))                // SET - bind to the `setLightOn` method below
-        .onGet(this.getLightOn.bind(this));               // GET - bind to the `getLightOn` method below
+    // each service must implement at-minimum the "required characteristics" for the given service type
+    // see https://developers.homebridge.io/#/service/Lightbulb
 
-      // register handlers for the Brightness Characteristic
-      this.lightService.getCharacteristic(this.platform.Characteristic.Brightness)
-        .onSet(this.setLightBrightness.bind(this))       // SET - bind to the 'setLightBrightness` method below
-        .onGet(this.getLightBrightness.bind(this));       // SET - bind to the 'getLightBrightness` method below
+    // register handlers for the On/Off Characteristic
+    this.lightService.getCharacteristic(this.platform.Characteristic.On)
+      .onSet(this.setLightOn.bind(this))                // SET - bind to the `setLightOn` method below
+      .onGet(this.getLightOn.bind(this));               // GET - bind to the `getLightOn` method below
 
-    })();
+    // register handlers for the Brightness Characteristic
+    this.lightService.getCharacteristic(this.platform.Characteristic.Brightness)
+      .setProps({
+        minValue: 0,
+        maxValue: 100,
+        minStep: 100/BrightnessLevels,
+      })
+      .onSet(this.setLightBrightness.bind(this))       // SET - bind to the 'setLightBrightness` method below
+      .onGet(this.getLightBrightness.bind(this));       // SET - bind to the 'getLightBrightness` method below
+    
 
 
     // INITIALIZE FAN SERVICE
-    (()=>{
-      // get the Fan service if it exists, otherwise create a new Fan service
-      this.fanService = this.accessory.getService(this.platform.Service.Fanv2) || this.accessory.addService(this.platform.Service.Fanv2);
+    // get the Fan service if it exists, otherwise create a new Fan service
+    this.fanService = this.accessory.getService(this.platform.Service.Fanv2) || this.accessory.addService(this.platform.Service.Fanv2);
 
-      // set the service name, this is what is displayed as the default name on the Home app
-      this.fanService.setCharacteristic(this.platform.Characteristic.Name, `${this.name} Fan`);
+    // set the service name, this is what is displayed as the default name on the Home app
+    this.fanService.setCharacteristic(this.platform.Characteristic.Name, `${this.name} Fan`);
 
-      // register handlers for the Active Characteristic
-      this.fanService.getCharacteristic(this.platform.Characteristic.Active)
-        .onSet(this.setFanOn.bind(this))                // SET - bind to the `setFanOn` method below
-        .onGet(this.getFanOn.bind(this));               // GET - bind to the `getFanOn` method below
+    // register handlers for the Active Characteristic
+    this.fanService.getCharacteristic(this.platform.Characteristic.Active)
+      .onSet(this.setFanActive.bind(this))                // SET - bind to the `setFanActive` method below
+      .onGet(this.getFanActive.bind(this));               // GET - bind to the `getFanActive` method below
 
-      this.fanService.getCharacteristic(this.platform.Characteristic.RotationSpeed)
-        .onSet(this.setFanSpeed.bind(this))
-        .onGet(this.getFanSpeed.bind(this));
+    this.fanService.getCharacteristic(this.platform.Characteristic.RotationSpeed)
+      .setProps({
+        minValue: 0,
+        maxValue: 100,
+        minStep: 100/FanSpeeds,
+        validValues: [0, 100/FanSpeeds, 200/FanSpeeds, 100]
+      })
+      .onSet(this.setFanSpeed.bind(this))
+      .onGet(this.getFanSpeed.bind(this));
 
-    })();
+
+
+  
+
 
 
     //Initialize the state from context
     if(this.accessory.context.state) {
-      const updatedState = {...this.accessory.context.state, ...this.accessoryState};
-      this.accessoryState = {...updatedState};
+      Object.keys(this.accessoryState).forEach(stateKey=>{
+        if(stateKey in this.accessory.context.state) {
+          this.accessoryState[stateKey] = this.accessory.context.state[stateKey];
+        }
+      });
       
+      // set characteristic to trigger the commands and make sure the digital model of these fans matches the reality.
+      this.lightService.setCharacteristic(this.platform.Characteristic.Brightness, this.accessoryState.Brightness);
+      this.lightService.setCharacteristic(this.platform.Characteristic.On, this.accessoryState.LightOn);
 
-      const state = this.accessoryState;
-
-      this.lightService.updateCharacteristic(this.platform.Characteristic.On, state.LightOn);
-      this.lightService.updateCharacteristic(this.platform.Characteristic.Brightness, 100*state.LightBrightness/BrightnessLevels);
-
-      this.fanService.updateCharacteristic(this.platform.Characteristic.Active, state.FanOn);
-      this.fanService.updateCharacteristic(this.platform.Characteristic.RotationSpeed, 100*state.FanSpeed/FanSpeeds);
+      this.fanService.setCharacteristic(this.platform.Characteristic.RotationSpeed, this.accessoryState.Speed);
+      this.fanService.setCharacteristic(this.platform.Characteristic.Active, this.accessoryState.FanOn);
     }
     else {
       this.accessory.context.state = this.accessoryState;
@@ -136,123 +140,97 @@ export class CeilingFanRemote extends EventEmitter {
 
   }
 
-  private updateState(update:accessoryStateUpdate, afterUpdate:optionalCallback = null) {
-    Object.keys(update).forEach(key=>{
-      this.accessoryState[key] = update[key];
-      this.emit('update', {remote:this.accessory.context.config.remote_ids[0], parameter:key, value:update[key]});
-
-      if(this.updateDebouncers[key]) {
-        clearTimeout(this.updateDebouncers[key]);
-      }
-      this.updateDebouncers[key] = setTimeout(()=>{
-
-        //Update the accessory context
-
-        this.accessory.context.state = this.accessoryState;
-
-        
-        this.platform.api.updatePlatformAccessories([this.accessory]);
-
-
-        if(afterUpdate) {
-          afterUpdate();
-        }
-      }, 50);
-    });
-  }
-
   get config() {
     return this.accessory.context.config;
   }
 
-  async setLightOn(value: CharacteristicValue) {
-    // implement your own code to turn your device on/off
-    this.updateState({LightOn: value as boolean});
 
-    this.platform.log.debug(`${this.name}.setLightOn(${value})`);
-  }
 
   async getLightOn(): Promise<CharacteristicValue> {
-    const isOn = this.accessoryState.LightOn;
-
-    //this.platform.log.debug(`${this.name}.getLightOn() -> ${isOn}`);
-
-    return isOn;
-  }
-
-  async setLightBrightness(value: CharacteristicValue) {
-    const newBrightness = Math.round((value as number)/100 * BrightnessLevels);
-    const snapValue = Math.round(100*(newBrightness/BrightnessLevels));
-
-    this.platform.log.debug(`${this.name}.setLightBrightness(${value}) -> ${newBrightness}`);
-
-    if(newBrightness!==0) {
-      //If the new brightness is 0, we're not going to actually save it to the state. So that if the light is just turned on we can return to the last brightness that was set.
-
-      this.updateState(
-        {LightBrightness: newBrightness},
-        ()=>{
-          //After debounce snap the value
-          this.platform.log.debug(`${this.name}.snapLightBrightness(${value}) -> ${snapValue}%`);
-          this.lightService.updateCharacteristic(this.platform.Characteristic.Brightness, snapValue);
-        }
-      );
-    }
-
-    
+    this.platform.log.debug(Date.now()+` ${this.name}.getLightOn() -> return: ${this.accessoryState.LightOn}`);
+    return this.accessoryState.LightOn;
   }
 
   async getLightBrightness(): Promise<CharacteristicValue> {
-    const brightness = this.accessoryState.LightOn ? 100*(this.accessoryState.LightBrightness/BrightnessLevels) : 0;
-
-    //this.platform.log.debug(`${this.name}.getLightBrightness() -> ${brightness}`);
-
-    return brightness;
+    this.platform.log.debug(Date.now()+` ${this.name}.getLightBrightness() -> return: ${this.accessoryState.Brightness}`);
+    return this.accessoryState.Brightness;
   }
 
-  async setFanOn(value: CharacteristicValue) {
-    // implement your own code to turn your device on/off
-    this.updateState({FanOn: value as FanActive});
+  async getFanActive(): Promise<CharacteristicValue> {
+    this.platform.log.debug(Date.now()+` ${this.name}.getFanActive() -> return: ${this.accessoryState.FanOn}`);
 
-    this.platform.log.debug(`${this.name}.setFanOn(${value})`);
-  }
-
-  async getFanOn(): Promise<CharacteristicValue> {
-    const isOn = this.accessoryState.FanOn;
-
-    //this.platform.log.debug(`${this.name}.getFanOn() -> ${isOn}`);
-
-    return isOn;
-  }
-  
-  async setFanSpeed(value: CharacteristicValue) {
-    const newSpeed = Math.round((value as number)/100 * FanSpeeds);
-    const snapValue = Math.round(100*(newSpeed/FanSpeeds));
-    this.platform.log.debug(`${this.name}.setFanSpeed(${value}) -> ${newSpeed} || ${snapValue}%`);
-
-    if(newSpeed!==0) {
-      //If the new speed is 0, we're not going to actually save it to the state. 
-      // So that if the fan is just turned on we can return to the last speed that was set.
-
-      this.updateState(
-        {FanSpeed: newSpeed},
-        ()=>{
-          //After debounce snap the value
-          this.platform.log.debug(`${this.name}.snapFanSpeed(${value}) -> ${snapValue}%`);
-          this.fanService.updateCharacteristic(this.platform.Characteristic.RotationSpeed, snapValue);
-        }
-      );
-    }
-
+    return this.accessoryState.FanOn;
   }
 
   async getFanSpeed(): Promise<CharacteristicValue> {
-    const fanSpeed = this.accessoryState.FanOn ? 100*(this.accessoryState.FanSpeed/FanSpeeds) : 0;
+    this.platform.log.debug(Date.now()+` ${this.name}.getFanSpeed() -> return: ${this.accessoryState.Speed}`);
 
-    //this.platform.log.debug(`${this.name}.getFanSpeed() -> ${fanSpeed}`);
-
-    return fanSpeed;
+    return this.accessoryState.Speed;
   }
+  
+
+
+  async setLightOn(value: CharacteristicValue) {
+    this.platform.log.debug(Date.now()+` ${this.name}.setLightOn(${value})`);
+    this.accessoryState.LightOn = value as boolean;
+    
+    //Update the cache
+    this.saveState();
+
+    //Send command
+    this.emit('update', { remote:this.accessory.context.config.remote_ids[0], parameter:'Brightness', value:value ? this.accessoryState.Brightness : 0 });
+
+  }
+
+  async setLightBrightness(value: CharacteristicValue) {
+    this.platform.log.debug(Date.now()+` ${this.name}.setLightBrightness(${value})`);
+
+    const newBrightness = value as number;
+
+    if(newBrightness > 0) {
+      this.accessoryState.Brightness = newBrightness;
+    }
+
+    //Update the cache
+    this.saveState();
+
+    //Send command
+    this.emit('update', { remote:this.accessory.context.config.remote_ids[0], parameter:'Brightness', value:newBrightness });
+  }
+
+
+  async setFanActive(value: CharacteristicValue) {
+    this.platform.log.debug(Date.now()+` ${this.name}.setFanActive(${value})`);
+
+    this.accessoryState.FanOn = value as FanActive;
+    
+    //Update the cache
+    this.saveState();
+
+    //Send command
+    this.emit('update', { remote:this.accessory.context.config.remote_ids[0], parameter:'Speed', value:value === FanStateActive ? this.accessoryState.Speed/(100/3) : 0 });
+
+  }
+
+  async setFanSpeed(value: CharacteristicValue) {
+    this.platform.log.debug(Date.now()+` ${this.name}.setFanSpeed(${value})`);
+
+    const newSpeed = value as number;
+    
+    if(newSpeed > 0) {
+      this.accessoryState.Speed = newSpeed;
+    }
+
+    //Update the cache
+    this.saveState();
+
+    //Send command
+    this.emit('update', { remote:this.accessory.context.config.remote_ids[0], parameter:'Speed', value:newSpeed/(100/3) });
+
+
+
+  }
+
 
   private get commands() {
     return [
@@ -260,62 +238,65 @@ export class CeilingFanRemote extends EventEmitter {
         label:'Fan Off',
         command:98,
         update:()=>{
-          this.accessoryState.FanOn = 0;
+          this.accessoryState.FanOn = FanStateInactive;
         }
       },
       {
         label:'Fan Toggle On/Off',
         command:35,
         update:()=>{
-          this.accessoryState.FanOn = this.accessoryState.FanOn===1 ? 0 : 1;
+          const newState = this.accessoryState.FanOn===FanStateActive ? FanStateInactive : FanStateActive;
+          this.accessoryState.FanOn = newState;
         }
       },
       {
         label:'Fan Speed 1',
         command:4,
         update:()=>{
-          this.accessoryState.FanOn = 1;
-          this.accessoryState.FanSpeed = 1;
+          this.accessoryState.FanOn = FanStateActive;
+          this.accessoryState.Speed = 100/3;
         }
       },
       {
         label:'Fan Speed 2',
         command:32,
         update:()=>{
-          this.accessoryState.FanOn = 1;
-          this.accessoryState.FanSpeed = 2;
+          this.accessoryState.FanOn = FanStateActive;
+          this.accessoryState.Speed = 200/3;
         }
       },
       {
         label:'Fan Speed 3',
         command:64,
         update:()=>{
-          this.accessoryState.FanOn = 1;
-          this.accessoryState.FanSpeed = 3;
+          this.accessoryState.FanOn = FanStateActive;
+          this.accessoryState.Speed = 100;
         }
       },
       {
         label:'fanMin',
         command:2,
         update:()=>{
-          this.accessoryState.FanOn = 1;
-          this.accessoryState.FanSpeed = 1;
+          this.accessoryState.FanOn = FanStateActive;
+          this.accessoryState.Speed = 100/3;
         }
       },
       {
         label:'fanMax',
         command:66,
         update:()=>{
-          this.accessoryState.FanOn = 1;
-          this.accessoryState.FanSpeed = 3;
+          this.accessoryState.FanOn = FanStateActive;
+          this.accessoryState.Speed = 100;
         }
       },
       {
         label:'fanUp',
         command:513,
         update:()=>{
-          this.accessoryState.FanOn = 1;
-          this.accessoryState.FanSpeed = Math.min(this.accessoryState.FanSpeed+1, FanSpeeds);
+          this.accessoryState.FanOn = FanStateActive;
+
+          const newSpeed = Math.min(this.accessoryState.Speed+(100/3), 100);
+          this.accessoryState.Speed = newSpeed;
         }
       },
       {
@@ -323,7 +304,9 @@ export class CeilingFanRemote extends EventEmitter {
         command:514,
         update:()=>{
           this.accessoryState.FanOn = 1;
-          this.accessoryState.FanSpeed = Math.max(this.accessoryState.FanSpeed-1, 1);
+
+          const newSpeed = Math.min(this.accessoryState.Speed-(100/3), 100/3);
+          this.accessoryState.Speed = newSpeed;
         }
       },
       {
@@ -352,7 +335,7 @@ export class CeilingFanRemote extends EventEmitter {
         command:10,
         update:()=>{
           this.accessoryState.LightOn = true;
-          this.accessoryState.LightBrightness = 1;
+          this.accessoryState.Brightness = 12;
         }
       },
       {
@@ -360,7 +343,7 @@ export class CeilingFanRemote extends EventEmitter {
         command:11,
         update:()=>{
           this.accessoryState.LightOn = true;
-          this.accessoryState.LightBrightness = 2;
+          this.accessoryState.Brightness = 25;
         }
       },
       {
@@ -368,7 +351,7 @@ export class CeilingFanRemote extends EventEmitter {
         command:12,
         update:()=>{
           this.accessoryState.LightOn = true;
-          this.accessoryState.LightBrightness = 3;
+          this.accessoryState.Brightness = 37;
         }
       },
       {
@@ -376,7 +359,7 @@ export class CeilingFanRemote extends EventEmitter {
         command:13,
         update:()=>{
           this.accessoryState.LightOn = true;
-          this.accessoryState.LightBrightness = 4;
+          this.accessoryState.Brightness = 50;
         }
       },
       {
@@ -384,7 +367,7 @@ export class CeilingFanRemote extends EventEmitter {
         command:14,
         update:()=>{
           this.accessoryState.LightOn = true;
-          this.accessoryState.LightBrightness = 5;
+          this.accessoryState.Brightness = 62;
         }
       },
       {
@@ -392,7 +375,7 @@ export class CeilingFanRemote extends EventEmitter {
         command:15,
         update:()=>{
           this.accessoryState.LightOn = true;
-          this.accessoryState.LightBrightness = 6;
+          this.accessoryState.Brightness = 75;
         }
       },
       {
@@ -400,7 +383,7 @@ export class CeilingFanRemote extends EventEmitter {
         command:72,
         update:()=>{
           this.accessoryState.LightOn = true;
-          this.accessoryState.LightBrightness = 7;
+          this.accessoryState.Brightness = 87;
         }
       },
       {
@@ -408,7 +391,7 @@ export class CeilingFanRemote extends EventEmitter {
         command:73,
         update:()=>{
           this.accessoryState.LightOn = true;
-          this.accessoryState.LightBrightness = 8;
+          this.accessoryState.Brightness = 100;
         }
       },
       {
@@ -416,7 +399,7 @@ export class CeilingFanRemote extends EventEmitter {
         command:9,
         update:()=>{
           this.accessoryState.LightOn = true;
-          this.accessoryState.LightBrightness = 1;
+          this.accessoryState.Brightness = 12;
         }
       },
       {
@@ -424,7 +407,7 @@ export class CeilingFanRemote extends EventEmitter {
         command:74,
         update:()=>{
           this.accessoryState.LightOn = true;
-          this.accessoryState.LightBrightness = BrightnessLevels;
+          this.accessoryState.Brightness = 100;
         }
       },
       {
@@ -432,7 +415,10 @@ export class CeilingFanRemote extends EventEmitter {
         command:137,
         update:()=>{
           this.accessoryState.LightOn = true;
-          this.accessoryState.LightBrightness = Math.min(this.accessoryState.LightBrightness+1, BrightnessLevels);
+
+          const currentLevelIndex = LightLevels.indexOf(this.accessoryState.Brightness);
+          const nextLevelIndex = Math.min(LightLevels.length, currentLevelIndex+1);
+          this.accessoryState.Brightness = LightLevels[nextLevelIndex];
         }
       },
       {
@@ -440,7 +426,11 @@ export class CeilingFanRemote extends EventEmitter {
         command:265,
         update:()=>{
           this.accessoryState.LightOn = true;
-          this.accessoryState.LightBrightness = Math.max(this.accessoryState.LightBrightness-1, 1);
+
+
+          const currentLevelIndex = LightLevels.indexOf(this.accessoryState.Brightness);
+          const prevLevelIndex = Math.max(0, currentLevelIndex-1);
+          this.accessoryState.Brightness = LightLevels[prevLevelIndex];
         }
       },
       {
@@ -457,19 +447,30 @@ export class CeilingFanRemote extends EventEmitter {
   }
 
   public update(command:number): void {
+
+    this.platform.log.debug(Date.now()+` ${this.name}.command(${command})`);
     const _command = this.commands.find(c=>c.command===command);
     if(_command) {
-      this.platform.log.debug(_command.label);
+      this.platform.log.debug(Date.now()+` ${this.name} - Run Command ${_command.label}`);
 
       _command.update();
 
       this.lightService.updateCharacteristic(this.platform.Characteristic.On, this.accessoryState.LightOn);
-      this.lightService.updateCharacteristic(this.platform.Characteristic.Brightness, 100*this.accessoryState.LightBrightness/BrightnessLevels);
+      this.lightService.updateCharacteristic(this.platform.Characteristic.Brightness, this.accessoryState.Brightness);
 
       this.fanService.updateCharacteristic(this.platform.Characteristic.Active, this.accessoryState.FanOn);
-      this.fanService.updateCharacteristic(this.platform.Characteristic.RotationSpeed, 100*this.accessoryState.FanSpeed/FanSpeeds);
+      this.fanService.updateCharacteristic(this.platform.Characteristic.RotationSpeed, this.accessoryState.Speed);
     }
   }
   
+  private saveState():void {
+
+
+    //Update the accessory context
+    this.accessory.context.state = this.accessoryState;
+
+    this.platform.api.updatePlatformAccessories([this.accessory]);
+  }
+
 
 }
