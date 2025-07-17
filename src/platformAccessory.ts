@@ -24,17 +24,6 @@ interface accessoryState {
   Speed: number;
 }
 
-interface accessoryStateUpdate {
-  LightOn?:boolean; 
-  Brightness?:number;
-  FanOn?: FanActive;
-  Speed?: number;
-}
-
-type Callback = ()=>unknown;
-type optionalCallback = null | Callback;
-
-const DebounceTime = 300;
 
 /**
  * Platform Accessory
@@ -132,8 +121,10 @@ export class CeilingFanRemote extends EventEmitter {
     //Initialize the state from context
     if(this.accessory.context.state) {
       Object.keys(this.accessoryState).forEach(stateKey=>{
-        if(stateKey in this.accessory.context.state) this.accessoryState[stateKey] = this.accessory.context.state[stateKey];
-      })
+        if(stateKey in this.accessory.context.state) {
+          this.accessoryState[stateKey] = this.accessory.context.state[stateKey];
+        }
+      });
       
       // set characteristic to trigger the commands and make sure the digital model of these fans matches the reality.
       this.lightService.setCharacteristic(this.platform.Characteristic.Brightness, this.accessoryState.Brightness);
@@ -157,7 +148,7 @@ export class CeilingFanRemote extends EventEmitter {
 
   async getLightOn(): Promise<CharacteristicValue> {
     this.platform.log.debug(Date.now()+` ${this.name}.getLightOn() -> return: ${this.accessoryState.LightOn}`);
-   return this.accessoryState.LightOn;
+    return this.accessoryState.LightOn;
   }
 
   async getLightBrightness(): Promise<CharacteristicValue> {
@@ -187,7 +178,7 @@ export class CeilingFanRemote extends EventEmitter {
     this.saveState();
 
     //Send command
-    this.emit('update', { remote:this.accessory.context.config.remote_ids[0], parameter:"Brightness", value:value ? this.accessoryState.Brightness : 0 });
+    this.emit('update', { remote:this.accessory.context.config.remote_ids[0], parameter:'Brightness', value:value ? this.accessoryState.Brightness : 0 });
 
   }
 
@@ -204,7 +195,7 @@ export class CeilingFanRemote extends EventEmitter {
     this.saveState();
 
     //Send command
-    this.emit('update', { remote:this.accessory.context.config.remote_ids[0], parameter:"Brightness", value:newBrightness });
+    this.emit('update', { remote:this.accessory.context.config.remote_ids[0], parameter:'Brightness', value:newBrightness });
   }
 
 
@@ -217,7 +208,7 @@ export class CeilingFanRemote extends EventEmitter {
     this.saveState();
 
     //Send command
-    this.emit('update', { remote:this.accessory.context.config.remote_ids[0], parameter:"Speed", value:value === FanStateActive ? this.accessoryState.Speed/(100/3) : 0 });
+    this.emit('update', { remote:this.accessory.context.config.remote_ids[0], parameter:'Speed', value:value === FanStateActive ? this.accessoryState.Speed/(100/3) : 0 });
 
   }
 
@@ -234,7 +225,7 @@ export class CeilingFanRemote extends EventEmitter {
     this.saveState();
 
     //Send command
-    this.emit('update', { remote:this.accessory.context.config.remote_ids[0], parameter:"Speed", value:newSpeed/(100/3) });
+    this.emit('update', { remote:this.accessory.context.config.remote_ids[0], parameter:'Speed', value:newSpeed/(100/3) });
 
 
 

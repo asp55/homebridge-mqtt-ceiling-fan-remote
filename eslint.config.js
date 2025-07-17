@@ -15,7 +15,7 @@ export default tseslint.config(
       'dot-notation': 'error',
       'eqeqeq': ['error', 'smart'],
       'curly': ['error', 'all'],
-      'brace-style': ['error', 'Stroustrup'],
+      'brace-style': ['error', 'stroustrup'],
       'prefer-arrow-callback': 'warn',
       'max-len': ['off', 160],
       'object-curly-spacing': ['error', 'always'],

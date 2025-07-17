@@ -269,7 +269,7 @@ export class CeilingFanRemotePlatform implements DynamicPlatformPlugin {
                       this.remotes[remote].forEach(accessory=>{
                         this.log.debug(Date.now()+` Sending command (${command}) to ${accessory.config.name}`);
 
-                        accessory.update(command)
+                        accessory.update(command);
                       });
                     }
                   }
@@ -300,10 +300,10 @@ export class CeilingFanRemotePlatform implements DynamicPlatformPlugin {
             const commandCallback = ()=>{
               this.log.debug(Date.now()+` Sending command: ${room.config.name} ${props.parameter} (${props.value})`, hexCommand(props.remote, command));
               mqttClient.publish(`cmnd/${this.config.rfbridge.topic}/rfraw`, hexCommand(props.remote, command));
-            }
+            };
             commandCallback.bind(this);
 
-            this.debounceQueue.queue(`${props.remote}/${props.parameter}`, commandCallback)
+            this.debounceQueue.queue(`${props.remote}/${props.parameter}`, commandCallback);
           }
         });
       });
