@@ -12,4 +12,4 @@ export const PLUGIN_NAME = 'homebridge-mqtt-ceiling-fan-remote';
  * This is the current version number of the schema plugin
  * Changing it will unregister all cached accessories and rebuild them
  */
-export const SCHEMA_VERSION = '0.2.0';
+export const SCHEMA_VERSION = '1.0.0';

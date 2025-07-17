@@ -73,7 +73,7 @@ export class CeilingFanRemotePlatform implements DynamicPlatformPlugin {
   private rfbridgeResultsTopic:string = '';
   private rfbridgeBootTopic:string = '';
 
-  private debounceQueue:DebounceQueue = new DebounceQueue(500);
+  private debounceQueue:DebounceQueue = new DebounceQueue();
 
   constructor(
     public readonly log: Logger,
@@ -89,7 +89,7 @@ export class CeilingFanRemotePlatform implements DynamicPlatformPlugin {
       this.log.info(`Schema version has been updated.
       You're currently using version ${this.config._version ? this.config._version : '0.0.0'} 
       The latest version is ${SCHEMA_VERSION}
-      Please update your configuration.`);
+      Please check your configuration and save to upgrade to the latest version.`);
     } 
     else {
       const connectUrl = `${this.config.mqtt.protocol}://${this.config.mqtt.host}:${this.config.mqtt.port}`;

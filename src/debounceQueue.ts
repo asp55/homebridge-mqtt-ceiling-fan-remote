@@ -1,11 +1,10 @@
 export default class DebounceQueue {
-  private _delay:number;
+  private _delay:number = 300;
   private _timeout:NodeJS.Timeout|null;
   private _queue:string[];
   private _queueCallbacks:(()=>void)[];
 
-  constructor(delay:number) {
-    this._delay = delay;
+  constructor() {
     this._timeout = null;
     
     this._queue = [];
