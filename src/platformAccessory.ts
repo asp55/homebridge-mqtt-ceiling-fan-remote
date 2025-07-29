@@ -83,7 +83,7 @@ export class CeilingFanRemote extends EventEmitter {
       .setProps({
         minValue: 0,
         maxValue: 100,
-        minStep: 100/BrightnessLevels,
+        minStep: 100/BrightnessLevels
       })
       .onSet(this.setLightBrightness.bind(this))       // SET - bind to the 'setLightBrightness` method below
       .onGet(this.getLightBrightness.bind(this));       // SET - bind to the 'getLightBrightness` method below
@@ -107,10 +107,12 @@ export class CeilingFanRemote extends EventEmitter {
         minValue: 0,
         maxValue: 100,
         minStep: 100/FanSpeeds,
-        validValues: [0, 100/FanSpeeds, 200/FanSpeeds, 100]
+        validValues: null //[0, 100/FanSpeeds, 200/FanSpeeds, 100]
       })
       .onSet(this.setFanSpeed.bind(this))
       .onGet(this.getFanSpeed.bind(this));
+
+    
 
 
 
@@ -225,7 +227,7 @@ export class CeilingFanRemote extends EventEmitter {
     this.saveState();
 
     //Send command
-    this.emit('update', { remote:this.accessory.context.config.remote_ids[0], parameter:'Speed', value:newSpeed/(100/3) });
+    this.emit('update', { remote:this.accessory.context.config.remote_ids[0], parameter:'Speed', value:Math.round(newSpeed/(100/3)) });
 
 
 
