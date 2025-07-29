@@ -2,7 +2,7 @@
   "name": "homebridge-mqtt-ceiling-fan-remote",
   "displayName": "MQTT Ceiling Fan Remote",
   "type": "module",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "private": false,
   "description": "A remote using http commands to control a hunter ceiling fan via a tasmotized sonoff rfbridge for homebridge written in Typescript",
   "author": "Andrew S. Parnell",
